@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from runpy import run_path
 from types import SimpleNamespace
@@ -128,7 +129,8 @@ async def test_recording_export_rejects_untrusted_urls_and_preserves_existing_fi
     save = harness["save_demo_video"]
     result = await save(api, "owned-fixture", path)
     assert result["bytes"] == 13 and path.read_bytes() == b"fixture-video"
-    assert path.stat().st_mode & 0o777 == 0o600
+    if os.name != "nt":
+        assert path.stat().st_mode & 0o777 == 0o600
     with pytest.raises(FileExistsError):
         await save(api, "owned-fixture", path)
     assert path.read_bytes() == b"fixture-video"

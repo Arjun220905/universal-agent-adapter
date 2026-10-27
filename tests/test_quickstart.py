@@ -202,17 +202,21 @@ async def test_one_window_start_preflights_and_closes_single_owned_bot_and_tunne
     monkeypatch.setenv("ADAPTER_API_KEY", "a" * 40)
     created, stopped = [], []
     bot_created = asyncio.Event()
+    creation_finished = asyncio.Event()
     closed = []
 
     async def create(payload, **kwargs):
         created.append(payload)
         bot_created.set()
+        await asyncio.sleep(.05)  # Cancellation arrives before the create response.
+        creation_finished.set()
         return {"bot_id": "owned"}
 
     async def status(bot_id):
         return {"status": "Done" if stopped else "InMeeting"}
 
     async def remove(bot_id):
+        assert creation_finished.is_set()
         stopped.append(bot_id)
 
     class Tunnel:

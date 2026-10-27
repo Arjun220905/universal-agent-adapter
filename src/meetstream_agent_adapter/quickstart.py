@@ -299,9 +299,21 @@ async def run(settings, meeting, port, *, mia=False, pilot_env=None, allow_opena
             async with httpx.AsyncClient(base_url=origin, timeout=30,
                                          trust_env=False,
                                          headers={"Authorization": "Bearer " + os.environ["ADAPTER_API_KEY"]}) as client:
-                response = await client.post("/v1/sessions", json={"meeting_link": meeting})
-                response.raise_for_status()
-                session = response.json()["session_id"]
+                async def create_session():
+                    nonlocal session
+                    async with asyncio.timeout(30):
+                        response = await client.post("/v1/sessions", json={"meeting_link": meeting})
+                        response.raise_for_status()
+                        session = response.json()["session_id"]
+
+                # Finish tracking an in-flight create before cancellation cleanup,
+                # as in hosted mode; do not reset its HTTP connection mid-response.
+                creating = asyncio.create_task(create_session())
+                try:
+                    await asyncio.shield(creating)
+                finally:
+                    if not creating.done():
+                        await asyncio.gather(creating, return_exceptions=True)
                 print("Admit Adapter SDK Test in your meeting. This starts one assistant, with no scripted speaker.", flush=True)
                 wake = settings.wake_words[0]
                 print(f'Say "{wake}" before a request. Control+C stops the assistant and closes the tunnel.')
